@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
-import { Checkbox } from 'primereact/checkbox';
+import { Checkbox, CheckboxChangeEvent } from 'primereact/checkbox';
 import 'primereact/resources/themes/saga-blue/theme.css'; // Include PrimeReact styles
 import 'primereact/resources/primereact.min.css';
 import OverlayPanelWithButton from './overlayPanel';
@@ -28,10 +28,28 @@ interface PaginationDetails {
 export default function BasicDemo(): JSX.Element {
   const [products, setProducts] = useState<Product[]>([]);
   const [checkedIds, setCheckedIds] = useState<number[]>([]);
-  const [selectedRows, setSelectedRows] = useState<Record<string, number[]>>({});
+  const [selectedRows, setSelectedRows] = useState<Record<string, number>>({});
   const [paginationDetails, setPaginationDetails] = useState<PaginationDetails | null>(null);
   const [first, setFirst] = useState<number>(0);
   const [isLoading, setLoading] = useState<boolean>(true);
+
+  
+  useEffect(() => {
+    const key = `page_${paginationDetails?.current_page}`;
+    console.log("from key from useEffect", key)
+    if (key in selectedRows && Array.isArray(products)) {
+      console.log('selected key', selectedRows);
+      for (let i = 0; i < selectedRows[key]; i++) {
+        setCheckedIds((prevCheckedIds) => prevCheckedIds.includes(products[i].id) ? prevCheckedIds : [...prevCheckedIds, products[i].id] );
+      }
+      setSelectedRows((prevSelectedRows) => {        
+        const newSelectedRows = { ...prevSelectedRows };
+        delete newSelectedRows[key];        
+        return newSelectedRows;
+      });
+    }
+  }, [paginationDetails,selectedRows]);
+
 
   useEffect(() => {
     fetchData('https://api.artic.edu/api/v1/artworks?page=1');
@@ -49,6 +67,9 @@ export default function BasicDemo(): JSX.Element {
     setLoading(true);
     try {
       const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
       const data = await response.json();
       setPaginationDetails(data.pagination);
       setProducts(data.data);
@@ -59,19 +80,21 @@ export default function BasicDemo(): JSX.Element {
     }
   };
 
-  const onCheckboxChange = (e: { checked: boolean }, rowData: Product): void => {
+  const onCheckboxChange = (e: CheckboxChangeEvent, rowData: Product): void => {
     setCheckedIds((prevCheckedIds) =>
       e.checked ? [...prevCheckedIds, rowData.id] : prevCheckedIds.filter((id) => id !== rowData.id)
     );
   };
 
   const checkboxBodyTemplate = (rowData: Product): JSX.Element => (
-    <Checkbox
-      id={`checkbox-${rowData.id}`}
-      value={rowData.id}
-      checked={checkedIds.includes(rowData.id)}
-      onChange={(e) => onCheckboxChange(e, rowData)}
-    />
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <Checkbox
+        id={`checkbox-${rowData.id}`}
+        value={rowData.id}
+        checked={checkedIds.includes(rowData.id)}
+        onChange={(e) => onCheckboxChange(e, rowData)}
+      />
+    </div>
   );
 
   const overlaypanelTemplate = (): JSX.Element | null =>
@@ -91,13 +114,15 @@ export default function BasicDemo(): JSX.Element {
   if (isLoading) {
     return <div style={{ maxHeight: '400px', overflowY: 'scroll' }}>Loading...</div>;
   }
-
+  const getRowClass = (rowData: Product): string => {
+    return checkedIds.includes(rowData.id) ? 'blue-row' : '';
+  };
   return (
     <>
       <div style={{ maxHeight: '600px', overflowY: 'scroll', padding: '5px' }}>
-        <DataTable value={products} tableStyle={{ minWidth: '50rem' }}>
+        <DataTable value={products}  rowClassName={getRowClass}>
           <Column
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            // style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             body={checkboxBodyTemplate}
             header={overlaypanelTemplate}
           />
@@ -113,8 +138,8 @@ export default function BasicDemo(): JSX.Element {
       {paginationDetails && (
         <Paginator
           first={first}
-          rows={paginationDetails.limit || 10}
-          totalRecords={paginationDetails.total || 0}
+          rows={paginationDetails.limit}
+          totalRecords={paginationDetails.total}
           onPageChange={onPageChange}
           template={{ layout: 'PrevPageLink CurrentPageReport NextPageLink' }}
         />
